@@ -152,7 +152,7 @@ UPROGS=\
 	$U/_sync\
 	$U/_sync\
 	$U/_pgtbltest\
-#	$U/_cowtest\
+	$U/_cowtest\
 #	$U/_minidb\
 
 fs.img: mkfs/mkfs README $(UPROGS)

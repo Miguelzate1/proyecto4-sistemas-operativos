@@ -114,3 +114,16 @@ krefinc(uint64 pa)
   ref_cnt[pa / PGSIZE]++;
   release(&ref_lock);
 }
+
+int
+krefcnt(void *pa)
+{
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+    return 0;
+  
+  acquire(&ref_lock);
+  int count = ref_cnt[(uint64)pa / PGSIZE];
+  release(&ref_lock);
+  
+  return count;
+}

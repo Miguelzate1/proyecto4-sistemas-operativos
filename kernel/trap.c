@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 
+int cowfault(pagetable_t, uint64);
+
 struct spinlock tickslock;
 uint ticks;
 
@@ -68,6 +70,8 @@ usertrap(void)
     syscall();
   } else if ((which_dev = devintr()) != 0) {
     // ok
+  } else if (r_scause() == 15 && cowfault(p->pagetable, r_stval()) == 0) {
+    // NUEVO: Intentamos resolverlo como Copy-on-Write primero.
   } else if ((r_scause() == 15 || r_scause() == 13) &&
              vmfault(p->pagetable, p->sz, r_stval(),
                      (r_scause() == 13) ? 1 : 0) != 0) {
@@ -93,7 +97,6 @@ usertrap(void)
   // return to trampoline.S; satp value in a0.
   return satp;
 }
-
 //
 // set up trapframe and control registers for a return to user space
 //

@@ -61,6 +61,7 @@ void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
 void            krefinc(uint64); // NUEVO
+int             krefcnt(void*);
 
 // log.c
 void            initlog(int, struct superblock*);

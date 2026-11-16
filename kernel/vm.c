@@ -174,6 +174,9 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+
+int             cowfault(pagetable_t, uint64);
+
 // create an empty user page table.
 // returns 0 if out of memory.
 pagetable_t
@@ -525,5 +528,41 @@ ismapped(pagetable_t pagetable, uint64 va)
   if (*pte & PTE_V) {
     return 1;
   }
+  return 0;
+}
+int
+cowfault(pagetable_t pagetable, uint64 va)
+{
+  if(va >= MAXVA)
+    return -1;
+  
+  va = PGROUNDDOWN(va);
+  pte_t *pte = walk(pagetable, va, 0);
+  
+  if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
+    return -1;
+    
+  if((*pte & PTE_COW) == 0)
+    return -1;
+    
+  uint64 pa = PTE2PA(*pte);
+  
+  if(krefcnt((void*)pa) == 1) {
+    // Si somos los únicos dueños, solo restauramos el permiso de escritura
+    *pte = (*pte & ~PTE_COW) | PTE_W;
+  } else {
+    // Si la comparten varios, copiamos la página
+    char *mem = kalloc();
+    if(mem == 0)
+      return -1; 
+      
+    memmove(mem, (char*)pa, PGSIZE);
+    
+    *pte = (PA2PTE(mem) | PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+    
+    kfree((void*)pa); // Soltamos nuestra referencia a la original
+  }
+  
+  sfence_vma(); // Limpiamos caché de traducción
   return 0;
 }
