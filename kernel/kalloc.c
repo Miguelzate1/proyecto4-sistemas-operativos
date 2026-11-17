@@ -127,3 +127,18 @@ krefcnt(void *pa)
   
   return count;
 }
+
+
+uint64
+kfreepages(void)
+{
+  struct run *r;
+  uint64 n = 0;
+
+  acquire(&kmem.lock);
+  for(r = kmem.freelist; r; r = r->next)
+    n++;
+  release(&kmem.lock);
+
+  return n;
+}

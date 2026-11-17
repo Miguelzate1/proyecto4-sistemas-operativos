@@ -175,7 +175,6 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 }
 
 
-int             cowfault(pagetable_t, uint64);
 
 // create an empty user page table.
 // returns 0 if out of memory.
@@ -421,26 +420,43 @@ copyout(pagetable_t pagetable, uint64 psz, uint64 dstva, char *src, uint64 len)
 // Copy len bytes to dst from virtual address srcva in a given page table.
 // Return 0 on success, -1 on error.
 int
-copyin(pagetable_t pagetable, uint64 psz, char *dst, uint64 srcva, uint64 len)
+copyout(pagetable_t pagetable, uint64 psz, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+  pte_t *pte;
 
   while (len > 0) {
-    va0 = PGROUNDDOWN(srcva);
+    va0 = PGROUNDDOWN(dstva);
+    if (va0 >= MAXVA)
+      return -1;
+
+    // NUEVO: Si la página destino es CoW, resolverla antes de walkaddr
+    pte = walk(pagetable, va0, 0);
+    if (pte != 0 && (*pte & PTE_V) && (*pte & PTE_COW)) {
+      if (cowfault(pagetable, va0) < 0)
+        return -1;
+    }
+
     pa0 = walkaddr(pagetable, va0);
     if (pa0 == 0) {
-      if ((pa0 = vmfault(pagetable, psz, va0, 1)) == 0) {
+      if ((pa0 = vmfault(pagetable, psz, va0, 0)) == 0) {
         return -1;
       }
     }
-    n = PGSIZE - (srcva - va0);
+
+    pte = walk(pagetable, va0, 0);
+    // forbid copyout over read-only user text pages.
+    if ((*pte & PTE_W) == 0)
+      return -1;
+
+    n = PGSIZE - (dstva - va0);
     if (n > len)
       n = len;
-    memmove(dst, (void *)(pa0 + (srcva - va0)), n);
+    memmove((void *)(pa0 + (dstva - va0)), src, n);
 
     len -= n;
-    dst += n;
-    srcva = va0 + PGSIZE;
+    src += n;
+    dstva = va0 + PGSIZE;
   }
   return 0;
 }
@@ -530,39 +546,61 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
+
 int
 cowfault(pagetable_t pagetable, uint64 va)
 {
   if(va >= MAXVA)
     return -1;
-  
+
   va = PGROUNDDOWN(va);
   pte_t *pte = walk(pagetable, va, 0);
-  
+
   if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
     return -1;
-    
+
   if((*pte & PTE_COW) == 0)
     return -1;
-    
+
+  struct proc *p = myproc();
+  if(p && p->pagetable == pagetable)
+    p->cowfaults++;
+
   uint64 pa = PTE2PA(*pte);
-  
+
   if(krefcnt((void*)pa) == 1) {
-    // Si somos los únicos dueños, solo restauramos el permiso de escritura
     *pte = (*pte & ~PTE_COW) | PTE_W;
   } else {
-    // Si la comparten varios, copiamos la página
     char *mem = kalloc();
     if(mem == 0)
-      return -1; 
-      
+      return -1;
+
     memmove(mem, (char*)pa, PGSIZE);
-    
     *pte = (PA2PTE(mem) | PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
-    
-    kfree((void*)pa); // Soltamos nuestra referencia a la original
+    kfree((void*)pa);
+
+    if(p && p->pagetable == pagetable)
+      p->cowcopies++;
   }
-  
-  sfence_vma(); // Limpiamos caché de traducción
+
+  sfence_vma();
   return 0;
+}
+
+uint64
+uvmshared(pagetable_t pagetable, uint64 sz)
+{
+  pte_t *pte;
+  uint64 i, pa, shared = 0;
+
+  for(i = 0; i < sz; i += PGSIZE){
+    pte = walk(pagetable, i, 0);
+    if(pte != 0 && (*pte & PTE_V) && (*pte & PTE_U)){
+      pa = PTE2PA(*pte);
+      if(krefcnt((void*)pa) > 1)
+        shared++;
+    }
+  }
+  return shared;
 }
