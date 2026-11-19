@@ -168,6 +168,6 @@ Todas las suites pasan con `make qemu CPUS=3` (salida completa en `pruebas/`):
 
 # Declaración de uso de IA
 
-[Completar con las herramientas que usó cada integrante y para qué. Ejemplo: "Usamos Claude (Anthropic) como apoyo para implementar y revisar el comando snapshot de MiniDB, redactar el borrador del README y del reporte, y preparar la sustentación. Revisamos, probamos y entendemos todo el código y el texto entregado."]
+Usamos Gemini (Google) y Claude (Anthropic) como apoyo para consultar dudas sobre el manejo de tablas de páginas en xv6, depurar errores de compilación en el kernel, revisar la implementación de `minidb snapshot` y pulir la redacción del README y del reporte técnico. Todo el código y la documentación entregada fueron revisados, probados y comprendidos por los integrantes.
 
 Los integrantes asumen plena responsabilidad académica sobre el contenido entregado.
