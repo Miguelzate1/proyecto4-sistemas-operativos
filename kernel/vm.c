@@ -391,7 +391,7 @@ copyout(pagetable_t pagetable, uint64 psz, uint64 dstva, char *src, uint64 len)
     if (va0 >= MAXVA)
       return -1;
 
-    // NUEVO: Si la página destino es CoW, resolverla antes de walkaddr
+    // Si la página destino es CoW, resolverla antes de walkaddr
     pte = walk(pagetable, va0, 0);
     if (pte != 0 && (*pte & PTE_V) && (*pte & PTE_COW)) {
       if (cowfault(pagetable, va0) < 0)
